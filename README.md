@@ -12,7 +12,7 @@ Bases (MIBs)**: the directories of tab-separated ASCII tables (`pcf.dat`,
   (UTF-8/ASCII or Latin-1) are detected per file and preserved. An unmodified
   MIB is written back byte for byte, and an edited table changes only where it
   was edited.
-- **Schema aware**: the 53 ICD tables (issue 6.7) come with column names,
+- **Schema aware**: the 53 ICD tables (issue 7.0) come with column names,
   types, key and mandatory flags, so columns can be addressed by name and the
   MIB can be validated.
 - **Self-contained**: no dependencies beyond `std`, no `unsafe`. The library
@@ -79,7 +79,7 @@ cargo run --example validate -- tests/data/auris/ASCII_RTE
 | `Table` | One `.dat` file: records, file name, `FileFormat` and optional `TableSchema`. |
 | `Record` | One line: the raw list of fields, exactly as in the file. |
 | `Row` / `RowMut` | Views of a record with access by column name (`get`, `parse`, `set`, `clear`). |
-| `TableSchema` / `Column` | Column names, types (`Char(n)`, `Number(n)`), key and mandatory flags. |
+| `TableSchema` / `Column` | Column names, types (`Char(n)`, unbounded `Char`, `Number(n)`), key and mandatory flags. |
 | `Diagnostic` | A validation finding (severity, table, line, column, value, kind). |
 
 Records may have fewer fields than the schema (MIBs produced for an older ICD
@@ -132,5 +132,7 @@ edit-and-write-back workflow, and LF ↔ CRLF conversion.
   other files in the MIB directory are neither read nor modified.
 - `write_dir` does not delete files: removing a table from a `Mib` leaves its
   file on disk.
-- The built-in schema follows ICD issue 6.7. Columns added by later issues are
-  kept as extra fields and can be named by supplying a schema.
+- The built-in schema follows ICD issue 7.0 (2017), which is a superset of
+  the earlier issues: MIBs produced for older issues simply have fewer
+  columns. Columns added by later issues (7.1, 7.2) are kept as extra fields
+  and can be named by supplying a schema with `ReadOptions::schema`.

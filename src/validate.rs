@@ -164,6 +164,7 @@ pub(crate) fn check_table(table: &Table, out: &mut Vec<Diagnostic>) {
                 continue;
             }
             let (len, max) = match column.ty() {
+                ColumnType::Text => continue,
                 ColumnType::Char(max) => (value.chars().count(), max),
                 ColumnType::Number(max) => {
                     let digits = value.strip_prefix(['+', '-']).unwrap_or(value);
@@ -281,7 +282,7 @@ pub const REFERENCES: &[(&str, &str, &str, &str)] = &[
     ("cps", "CPS_NAME", "pst", "PST_NAME"),
     ("pvs", "PVS_ID", "psv", "PSV_PVSID"),
     ("pvs", "PVS_PSID", "pst", "PST_NAME"),
-    ("psm", "PSM_PSNAME", "pst", "PST_NAME"),
+    ("psm", "PSM_PARSET", "pst", "PST_NAME"),
     ("ccs", "CCS_NUMBR", "cca", "CCA_NUMBR"),
     ("pas", "PAS_NUMBR", "paf", "PAF_NUMBR"),
     ("prv", "PRV_NUMBR", "prf", "PRF_NUMBR"),
@@ -400,6 +401,18 @@ mod tests {
                 ),
                 (5, Some("DST_APID"), &DiagnosticKind::NotAnInteger),
             ]
+        );
+    }
+
+    #[test]
+    fn text_columns_have_no_length_limit() {
+        // PRV_MINVAL/PRV_MAXVAL are unbounded `Char` since issue 7.0; a long
+        // value is fine, a missing mandatory one is not.
+        let long = "1".repeat(64);
+        let t = table("prv", &format!("RANGE1\t{long}\t{long}\nRANGE2\t\t5\n"));
+        assert_eq!(
+            kinds(&validate_table(&t)),
+            [(1, Some("PRV_MINVAL"), &DiagnosticKind::MissingMandatory)]
         );
     }
 
