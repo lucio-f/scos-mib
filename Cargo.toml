@@ -1,0 +1,20 @@
+[package]
+name = "scos-mib"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Read, edit and write back SCOS-2000 Mission Information Base (MIB) ASCII tables"
+keywords = ["scos-2000", "mib", "esa", "spacecraft", "telemetry"]
+categories = ["aerospace", "parser-implementations"]
+
+# Plain Rust library (rlib): it is linked statically into every program that
+# uses it and has no dependencies. See .cargo/config.toml for fully static
+# executables (static glibc by default, or musl).
+[lib]
+name = "scos_mib"
+
+[dependencies]
+
+[lints.rust]
+missing_docs = "warn"
+unsafe_code = "forbid"
