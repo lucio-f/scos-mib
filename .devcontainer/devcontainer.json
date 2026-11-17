@@ -1,0 +1,20 @@
+{
+    "build": {
+        "dockerfile": "Containerfile"
+    },
+    "mounts": [
+        "source=claude-code-config-${devcontainerId},target=/home/vscode/.claude,type=volume"
+    ],
+    "containerEnv": {
+        "CLAUDE_CONFIG_DIR": "/home/vscode/.claude"
+    },
+    "postCreateCommand": "sudo chown -R vscode:vscode /home/vscode/.claude",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "openai.chatgpt",
+                "Anthropic.claude-code"
+            ]
+        }
+    }
+}
