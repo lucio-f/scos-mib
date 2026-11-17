@@ -1,0 +1,13 @@
+# Link the C runtime statically so that every executable built in this
+# repository (tests, examples, downstream tools) is a self-contained static
+# binary.
+#
+# Default target (static glibc): `cargo build` / `cargo test`.
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+# Optional fully static musl build (needs musl-tools, see the Containerfile):
+#   cargo build --target x86_64-unknown-linux-musl
+# musl targets link statically by default; the flag just makes it explicit.
+[target.x86_64-unknown-linux-musl]
+rustflags = ["-C", "target-feature=+crt-static"]

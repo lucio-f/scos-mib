@@ -1,0 +1,5 @@
+# The MIB test data must be stored and checked out byte for byte: the
+# integration tests check that tables are written back identically, and some
+# files deliberately lack a final newline. Disable end-of-line conversion
+# (e.g. core.autocrlf) for them.
+tests/data/** -text
