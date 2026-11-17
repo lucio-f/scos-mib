@@ -1,13 +1,21 @@
 //! Table schemas: column names, types and constraints.
 //!
 //! The crate ships the schema of every table defined in the SCOS-2000
-//! Database Import ICD (EGOS-MCS-S2K-ICD-0001, issue 6.7), see
+//! Database Import ICD (EGOS-MCS-S2K-ICD-0001, issue 7.0), see
 //! [`icd_table`] and [`ICD_TABLES`]. Schemas are used to address columns by
 //! name and to validate records; they never restrict what can be read or
 //! written. Tables that are not in the ICD (mission specific tables) are
 //! handled without a schema, and records may have fewer columns than the
 //! schema (older ICD issues) or more (mission specific extensions, which the
 //! ICD requires to be appended at the end of a record).
+//!
+//! Issue 7.0 is a superset of the earlier issues: from issue 6.7 it adds
+//! `CPC_ENDIAN` and `CVS_UNCERTAINTY` at the end of their tables, makes
+//! `PIC_APID` part of the PIC key, narrows `CVE_CVSID` and `CVP_CVSID` to
+//! `Number(5)` (the size of `CVS_ID` they refer to), and removes the fixed
+//! length of the command value fields (`CDF_VALUE`, `CPC_DEFVAL`, ...), see
+//! [`ColumnType::Text`]. MIBs written for older issues therefore validate
+//! against it.
 
 use std::borrow::Cow;
 use std::fmt;
@@ -17,15 +25,21 @@ use std::fmt;
 pub enum ColumnType {
     /// Character string of at most this many characters (`Char(n)`).
     Char(u16),
+    /// Character string without a fixed maximum length (`Char` in the ICD).
+    /// Used for command and sequence parameter values, whose allowed size
+    /// depends on the type of the parameter they apply to.
+    Text,
     /// Integer of at most this many digits (`Number(n)`), optionally signed.
     Number(u16),
 }
 
 impl ColumnType {
-    /// Maximum number of characters (for `Char`) or digits (for `Number`).
-    pub fn max_len(self) -> u16 {
+    /// Maximum number of characters (for `Char`) or digits (for `Number`);
+    /// `None` for [`Text`](Self::Text).
+    pub fn max_len(self) -> Option<u16> {
         match self {
-            Self::Char(n) | Self::Number(n) => n,
+            Self::Char(n) | Self::Number(n) => Some(n),
+            Self::Text => None,
         }
     }
 }
@@ -34,6 +48,7 @@ impl fmt::Display for ColumnType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Char(n) => write!(f, "Char({n})"),
+            Self::Text => f.write_str("Char"),
             Self::Number(n) => write!(f, "Number({n})"),
         }
     }
@@ -208,6 +223,10 @@ const fn n(name: &'static str, digits: u16) -> Column {
     Column::builtin(name, ColumnType::Number(digits))
 }
 
+const fn t(name: &'static str) -> Column {
+    Column::builtin(name, ColumnType::Text)
+}
+
 // The schemas live in named statics: `Column` and `TableSchema` contain
 // `Cow`s, which have drop glue, so they cannot be promoted from temporary
 // array expressions (`&[...]`) inside a static initializer.
@@ -221,7 +240,7 @@ macro_rules! icd_tables {
         ];
 
         /// Schemas of all tables defined by the SCOS-2000 Database Import ICD
-        /// (EGOS-MCS-S2K-ICD-0001, issue 6.7), in ICD order.
+        /// (EGOS-MCS-S2K-ICD-0001, issue 7.0), in ICD order.
         pub static ICD_TABLES: &[TableSchema] = &ICD_TABLE_ARRAY;
     };
 }
@@ -355,7 +374,7 @@ icd_tables! {
         n("PIC_PI1_WID", 3).mandatory(),
         n("PIC_PI2_OFF", 5).mandatory(),
         n("PIC_PI2_WID", 3).mandatory(),
-        n("PIC_APID", 5),
+        n("PIC_APID", 5).key(),
     ];
     "tpcf", "Telemetry packet characteristics" => [
         n("TPCF_SPID", 10).key().mandatory(),
@@ -532,9 +551,10 @@ icd_tables! {
         c("CPC_CCAREF", 10),
         c("CPC_PAFREF", 10),
         c("CPC_INTER", 1),
-        c("CPC_DEFVAL", 17),
+        t("CPC_DEFVAL"),
         c("CPC_CORR", 1),
         n("CPC_OBTID", 5),
+        c("CPC_ENDIAN", 1),
     ];
     "cdf", "Command details" => [
         c("CDF_CNAME", 8).key().mandatory(),
@@ -545,7 +565,7 @@ icd_tables! {
         n("CDF_GRPSIZE", 2).key(),
         c("CDF_PNAME", 8),
         c("CDF_INTER", 1),
-        c("CDF_VALUE", 17),
+        t("CDF_VALUE"),
         c("CDF_TMID", 8),
     ];
     "ptv", "Command pre-transmission validation" => [
@@ -600,7 +620,7 @@ icd_tables! {
         c("SDF_PNAME", 8).key().mandatory(),
         c("SDF_FTYPE", 1),
         c("SDF_VTYPE", 1),
-        c("SDF_VALUE", 17),
+        t("SDF_VALUE"),
         c("SDF_VALSET", 8),
         n("SDF_REPPOS", 4),
     ];
@@ -615,7 +635,7 @@ icd_tables! {
         c("CSP_RADIX", 1),
         c("CSP_TYPE", 1).mandatory(),
         c("CSP_VTYPE", 1),
-        c("CSP_DEFVAL", 17),
+        t("CSP_DEFVAL"),
         c("CSP_CATEG", 1),
         c("CSP_PRFREF", 10),
         c("CSP_CCAREF", 10),
@@ -629,9 +649,10 @@ icd_tables! {
         n("CVS_START", 5).mandatory(),
         n("CVS_INTERVAL", 5).mandatory(),
         n("CVS_SPID", 10),
+        n("CVS_UNCERTAINTY", 5),
     ];
     "cve", "Verification expressions" => [
-        n("CVE_CVSID", 10).key().mandatory(),
+        n("CVE_CVSID", 5).key().mandatory(),
         c("CVE_PARNAM", 8).key().mandatory(),
         c("CVE_INTER", 1),
         c("CVE_VAL", 17),
@@ -641,7 +662,7 @@ icd_tables! {
     "cvp", "Verification profiles" => [
         c("CVP_TASK", 8).key().mandatory(),
         c("CVP_TYPE", 1).key(),
-        n("CVP_CVSID", 10).key().mandatory(),
+        n("CVP_CVSID", 5).key().mandatory(),
     ];
     "pst", "Parameter sets" => [
         c("PST_NAME", 8).key().mandatory(),
@@ -662,13 +683,13 @@ icd_tables! {
         c("PVS_PSID", 8).mandatory(),
         c("PVS_PNAME", 8).mandatory(),
         c("PVS_INTER", 1),
-        c("PVS_VALS", 17),
+        t("PVS_VALS"),
         n("PVS_BIT", 4).key().mandatory(),
     ];
     "psm", "Parameter set mapping" => [
         c("PSM_NAME", 8).key().mandatory(),
         c("PSM_TYPE", 1).key().mandatory(),
-        c("PSM_PSNAME", 8).key().mandatory(),
+        c("PSM_PARSET", 8).key().mandatory(),
     ];
     "cca", "Command parameter numerical (de-)calibrations" => [
         c("CCA_NUMBR", 10).key().mandatory(),
@@ -681,8 +702,8 @@ icd_tables! {
     ];
     "ccs", "Command parameter numerical (de-)calibration points" => [
         c("CCS_NUMBR", 10).key().mandatory(),
-        c("CCS_XVALS", 17).mandatory(),
-        c("CCS_YVALS", 17).key().mandatory(),
+        t("CCS_XVALS").mandatory(),
+        t("CCS_YVALS").key().mandatory(),
     ];
     "paf", "Command parameter textual (de-)calibrations" => [
         c("PAF_NUMBR", 10).key().mandatory(),
@@ -692,8 +713,8 @@ icd_tables! {
     ];
     "pas", "Command parameter textual (de-)calibration definitions" => [
         c("PAS_NUMBR", 10).key().mandatory(),
-        c("PAS_ALTXT", 16).mandatory(),
-        c("PAS_ALVAL", 17).key().mandatory(),
+        t("PAS_ALTXT").mandatory(),
+        t("PAS_ALVAL").key().mandatory(),
     ];
     "prf", "Command parameter range sets" => [
         c("PRF_NUMBR", 10).key().mandatory(),
@@ -706,8 +727,8 @@ icd_tables! {
     ];
     "prv", "Command parameter range values" => [
         c("PRV_NUMBR", 10).key().mandatory(),
-        c("PRV_MINVAL", 17).key().mandatory(),
-        c("PRV_MAXVAL", 17),
+        t("PRV_MINVAL").key().mandatory(),
+        t("PRV_MAXVAL"),
     ];
 }
 
@@ -733,7 +754,7 @@ mod tests {
                     table.name()
                 );
                 assert!(columns.insert(column.name()), "duplicate {}", column.name());
-                assert!(column.ty().max_len() > 0);
+                assert!(column.ty().max_len() != Some(0));
             }
         }
     }
@@ -745,6 +766,53 @@ mod tests {
         assert_eq!(pid.column_index("pid_spid"), Some(5));
         assert_eq!(pid.column("PID_SPID").unwrap().ty(), ColumnType::Number(10));
         assert!(icd_table("xyz").is_none());
+    }
+
+    #[test]
+    fn issue_7_0_changes() {
+        let names = |table: &str| -> Vec<String> {
+            icd_table(table)
+                .unwrap()
+                .columns()
+                .iter()
+                .map(|c| c.name().to_owned())
+                .collect()
+        };
+        assert_eq!(names("cpc").last().unwrap(), "CPC_ENDIAN");
+        assert_eq!(names("cpc").len(), 16);
+        assert_eq!(names("cvs").last().unwrap(), "CVS_UNCERTAINTY");
+        assert_eq!(names("psm"), ["PSM_NAME", "PSM_TYPE", "PSM_PARSET"]);
+
+        let pic = icd_table("pic").unwrap();
+        assert_eq!(pic.key_indices().collect::<Vec<_>>(), [0, 1, 6]);
+
+        let cve = icd_table("cve").unwrap();
+        assert_eq!(cve.column("CVE_CVSID").unwrap().ty(), ColumnType::Number(5));
+
+        let text: Vec<&str> = ICD_TABLES
+            .iter()
+            .flat_map(|t| t.columns())
+            .filter(|c| c.ty() == ColumnType::Text)
+            .map(Column::name)
+            .collect();
+        assert_eq!(
+            text,
+            [
+                "CPC_DEFVAL",
+                "CDF_VALUE",
+                "SDF_VALUE",
+                "CSP_DEFVAL",
+                "PVS_VALS",
+                "CCS_XVALS",
+                "CCS_YVALS",
+                "PAS_ALTXT",
+                "PAS_ALVAL",
+                "PRV_MINVAL",
+                "PRV_MAXVAL",
+            ]
+        );
+        assert_eq!(ColumnType::Text.to_string(), "Char");
+        assert_eq!(ColumnType::Text.max_len(), None);
     }
 
     #[test]

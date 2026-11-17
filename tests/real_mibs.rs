@@ -151,7 +151,7 @@ fn record_counts_and_schemas() {
     assert_eq!(config.file_name(), "TPKTconfigTable.dat");
 
     // Records hold the fields of the ICD issue they were produced for: the
-    // RTE PCF has 19 of the 23 issue 6.7 columns, CSIM has all of them.
+    // RTE PCF has 19 of the 23 ICD columns, CSIM has all of them.
     assert_eq!(rte.table("pcf").unwrap().record_width(), 19);
     assert_eq!(read("ASCII_CSIM").table("pcf").unwrap().record_width(), 23);
 }
